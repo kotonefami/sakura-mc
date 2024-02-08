@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "description": "Minecraft Port Transfering Proxy",
   "scripts": {
-    "build": "node scripts/build.mjs"
+    "build": "node scripts/build.mjs",
+    "pack": "node scripts/pack.mjs SakuraMC-Client.exe"
   },
   "keywords": [],
   "author": "",
@@ -11,6 +12,7 @@
   "devDependencies": {
     "@types/node": "^20.11.16",
     "esbuild": "^0.20.0",
+    "postject": "1.0.0-alpha.6",
     "tsx": "^4.7.0"
   }
 }
