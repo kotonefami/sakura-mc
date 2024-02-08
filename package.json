@@ -1,15 +1,16 @@
 {
   "name": "sakura-mc",
   "version": "1.0.0",
-  "description": "",
+  "description": "Minecraft Port Transfering Proxy",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "node scripts/build.mjs"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "devDependencies": {
     "@types/node": "^20.11.16",
+    "esbuild": "^0.20.0",
     "tsx": "^4.7.0"
   }
 }
