@@ -1,6 +1,8 @@
-import { Socket, connect, createServer } from "net";
+import { Socket, connect } from "net";
 import { SocketOpCode, SocketCloseCode, Address, SocketError } from "./Socket";
 import { EventEmitter } from "stream";
+import { Bridge } from "./Bridge";
+import { createPeerSocket } from "./client/Peer";
 
 /** クライアント */
 export class Client extends EventEmitter {
@@ -12,8 +14,8 @@ export class Client extends EventEmitter {
     /** 制御ソケット */
     public controlSocket: Socket;
 
-    /** クライアントソケットテーブル */
-    public socketTable: Record<string, Socket> = {};
+    /** ブリッジテーブル */
+    public bridges: Record<string, Bridge> = {};
 
     private _closeReason: SocketCloseCode = SocketCloseCode.UNKNOWN;
 
@@ -31,7 +33,7 @@ export class Client extends EventEmitter {
 
         this._connectPromise = new Promise<SocketCloseCode>((resolve, reject) => {
             this.controlSocket.on("error", err => this.emit("error", err));
-            this.controlSocket.on("connect", () => {
+            this.controlSocket.once("connect", () => {
                 this.controlSocket.write(Buffer.from([
                     SocketOpCode.HANDSHAKE
                 ]));
@@ -57,32 +59,12 @@ export class Client extends EventEmitter {
             this.emit("error", new SocketError(code));
             return code;
         }).then(code => {
-            this.controlSocket.on("data", data => {
-                const sourceAddress = data.subarray(2, data[1] + 2).toString();
-                const connectionIdBuffer = Buffer.concat([Buffer.from([sourceAddress.length]), Buffer.from(sourceAddress)]);
+            this.controlSocket.on("data", async data => {
+                const peerId = data.subarray(2, data[1] + 2).toString();
                 if (data[0] === SocketOpCode.CONNECT) {
-                    this.socketTable[sourceAddress] = connect({
-                        host: this.destination.host,
-                        port: this.destination.port
-                    }).on("data", data => {
-                        this.controlSocket.write(Buffer.concat([Buffer.from([SocketOpCode.DATA]), connectionIdBuffer, data]))
-                    }).once("close", () => {
-                        if (sourceAddress in this.socketTable) {
-                            this.socketTable[sourceAddress].end();
-                            delete this.socketTable[sourceAddress];
-                        }
+                    this.bridges[peerId] = new PoolBridge(createPeerSocket(proxy, peerId), connect(this.destination)).once("close", () => {
+                        if (peerId in this.bridges) delete this.bridges[peerId];
                     });
-                } else if (data[0] === SocketOpCode.DISCONNECT) {
-                    if (sourceAddress in this.socketTable) {
-                        this.socketTable[sourceAddress].end();
-                        delete this.socketTable[sourceAddress];
-                    }
-                } else if (data[0] === SocketOpCode.DATA) {
-                    if (sourceAddress in this.socketTable) {
-                        this.socketTable[sourceAddress].write(data.subarray(data[1] + 2));
-                    } else {
-                        console.log("more");
-                    }
                 }
             });
 

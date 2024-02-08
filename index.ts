@@ -1,8 +1,8 @@
 import { createServer } from "node:net";
-import type { AddressInfo, Socket } from "node:net";
-import { SocketCloseCode, SocketOpCode, encodeVarInt, resolveAddress } from "./src/Socket";
+import type { Socket } from "node:net";
+import { SocketCloseCode, SocketOpCode, resolveAddress } from "./src/Socket";
 import { Client } from "./src/Client";
-import { createHash } from "node:crypto";
+import { newPeerSocket, requestPeerSocket } from "./src/client/Peer";
 
 if (process.argv[2] === "proxy") {
     const receptionPort = parseInt(process.argv[3] ?? "25565");
@@ -10,8 +10,6 @@ if (process.argv[2] === "proxy") {
     let controlSocket: Socket | null = null;
 
     const server = createServer().on("listening", () => {
-        const address = server.address() as AddressInfo;
-
         console.log("SakuraMC - Minecraft Port Transfering Proxy");
         console.log(`ポート ${controlPort} でクライアント接続を待機しています`);
     }).on("connection", async socket => {
@@ -35,7 +33,22 @@ if (process.argv[2] === "proxy") {
                             SocketOpCode.HANDSHAKE,
                             SocketCloseCode.RESERVED
                         ]));
-                        socket.end();
+                        socket.destroy();
+                    }
+                } else if (data[0] === SocketOpCode.CONNECT) {
+                    if (controlSocket !== null) {
+                        socket.write(Buffer.from([
+                            SocketOpCode.CONNECT,
+                            SocketCloseCode.OK
+                        ]));
+                        // TODO: 認証がない
+                        newPeerSocket(data.subarray(2, data[1] + 2).toString(), socket);
+                    } else {
+                        socket.write(Buffer.from([
+                            SocketOpCode.CONNECT,
+                            SocketCloseCode.INVALID_PEER_ID
+                        ]));
+                        socket.destroy();
                     }
                 } else {
                     socket.destroy();
@@ -60,31 +73,14 @@ if (process.argv[2] === "proxy") {
 
     const receptionSocket = createServer().on("listening", () => {
         console.log(`ポート ${receptionPort} で Minecraft 接続を待機しています`);
-    }).on("connection", thirdparty => {
+    }).on("connection", async thirdparty => {
         if (controlSocket === null) {
             thirdparty.destroy();
             return;
         }
 
         const connectionId = `${thirdparty.remoteAddress}:${thirdparty.remotePort}`;
-        const connectionIdBuffer = Buffer.concat([Buffer.from([connectionId.length]), Buffer.from(connectionId)]);
-
-        controlSocket.write(Buffer.concat([Buffer.from([SocketOpCode.CONNECT]), connectionIdBuffer]));
-        thirdparty.once("close", () => controlSocket?.write(Buffer.concat([Buffer.from([SocketOpCode.DISCONNECT]), connectionIdBuffer])));
-        controlSocket.once("close", () => thirdparty.end());
-
-        thirdparty.on("data", data => controlSocket?.write(Buffer.concat([Buffer.from([SocketOpCode.DATA]), connectionIdBuffer, data])));
-        controlSocket.on("data", data => {
-            if (data[0] === SocketOpCode.DATA) {
-                if (data.subarray(2, data[1] + 2).toString() === connectionId) {
-                    thirdparty.write(data.subarray(data[1] + 2));
-                }
-            }
-        })
-
-        thirdparty.on("error", err => {
-            console.error(err);
-        });
+        const bridge = new PoolBridge(thirdparty, requestPeerSocket(controlSocket, connectionId));
     }).on("error", err => {
         console.error(err);
     }).listen(receptionPort);
