@@ -2,7 +2,6 @@ import { Socket, connect } from "node:net";
 import { EventEmitter } from "node:stream";
 import { SocketOpCode, SocketCloseCode, Address, SocketError } from "./Socket";
 import { Bridge } from "./Bridge";
-import { createPeerSocket } from "./Peer";
 
 export interface Client {
     on(event: "error", listener: (error: Error) => void): this;
@@ -70,13 +69,32 @@ export class Client extends EventEmitter {
             this.controlSocket.on("data", async data => {
                 const peerId = data.subarray(2, data[1] + 2).toString();
                 if (data[0] === SocketOpCode.CONNECT) {
-                    this.bridges[peerId] = new Bridge(await createPeerSocket(proxy, peerId), connect(this.destination)).once("close", () => {
+                    this.bridges[peerId] = new Bridge(await this._createPeerSocket(peerId), connect(this.destination)).once("close", () => {
                         if (peerId in this.bridges) delete this.bridges[peerId];
                     });
                 }
             });
 
             return code;
+        });
+    }
+
+    /**
+     * プロキシとのピアソケットを作成します。
+     * @param peerId ピアソケットID
+     */
+    private async _createPeerSocket(peerId: string): Promise<Socket> {
+        return await new Promise<Socket>((resolve, reject) => {
+            const socket = connect({
+                host: this.proxy.host,
+                port: this.proxy.port
+            }).once("data", data => {
+                // TODO: CloseCode から接続成功かどうか判別
+                resolve(socket);
+            }).once("close", () => {
+                reject(new SocketError(SocketCloseCode.INVALID_PEER_ID));
+            });
+            socket.write(Buffer.concat([Buffer.from([SocketOpCode.CONNECT, peerId.length]), Buffer.from(peerId)]));
         });
     }
 

@@ -1,13 +1,19 @@
-import { createServer, type Socket } from "node:net";
+import { createServer, Server, type Socket } from "node:net";
 import { EventEmitter } from "node:stream";
 import { SocketCloseCode, SocketOpCode } from "./Socket";
-import { newPeerSocket, requestPeerSocket } from "./Peer";
 import { Bridge } from "./Bridge";
 
 /** SakuraMC プロキシ */
 export class Proxy extends EventEmitter {
-    /** 制御ソケット */
+    /** 制御サーバー */
+    public controlServer: Server;
+    /** データ受付サーバー */
+    public receptionServer: Server;
+
+    /** アクティブな制御ソケット */
     public controlSocket: Socket | null = null;
+
+    private _peerSocketRequestResolves: Record<string, (socket: Socket) => any> = {};
 
     /**
      * @param controlPort 制御ポート
@@ -16,7 +22,7 @@ export class Proxy extends EventEmitter {
     constructor(controlPort: number = 12343, receptionPort: number = 25565) {
         super();
 
-        const server = createServer().on("listening", () => {
+        this.controlServer = createServer().on("listening", () => {
             console.log("SakuraMC - Minecraft Port Transfering Proxy");
             console.log(`ポート ${controlPort} でクライアント接続を待機しています`);
         }).on("connection", async socket => {
@@ -49,7 +55,7 @@ export class Proxy extends EventEmitter {
                                 SocketCloseCode.OK
                             ]));
                             // TODO: 認証がない
-                            newPeerSocket(data.subarray(2, data[1] + 2).toString(), socket);
+                            this._newPeerSocket(data.subarray(2, data[1] + 2).toString(), socket);
                         } else {
                             socket.write(Buffer.from([
                                 SocketOpCode.CONNECT,
@@ -78,7 +84,7 @@ export class Proxy extends EventEmitter {
             console.error(err);
         }).listen(controlPort);
 
-        const receptionSocket = createServer().on("listening", () => {
+        this.receptionServer = createServer().on("listening", () => {
             console.log(`ポート ${receptionPort} で Minecraft 接続を待機しています`);
         }).on("connection", async thirdparty => {
             if (this.controlSocket === null) {
@@ -87,10 +93,29 @@ export class Proxy extends EventEmitter {
             }
 
             const connectionId = `${thirdparty.remoteAddress}:${thirdparty.remotePort}`;
-            new Bridge(thirdparty, requestPeerSocket(this.controlSocket, connectionId));
+            new Bridge(thirdparty, this._requestPeerSocket(this.controlSocket, connectionId));
         }).on("error", err => {
             // TODO: サードパーティーソケットのエラーはどうするべきか
             console.error(err);
         }).listen(receptionPort);
+    }
+
+    /**
+     * クライアントにピアソケットを作成するよう要求します。
+     * @param controlSocket 制御ソケット
+     * @param peerId ピアソケットID
+     */
+    private async _requestPeerSocket(controlSocket: Socket, peerId: string): Promise<Socket> {
+        return await new Promise<Socket>((resolve, reject) => {
+            this._peerSocketRequestResolves[peerId] = resolve;
+            controlSocket.write(Buffer.concat([Buffer.from([SocketOpCode.CONNECT, peerId.length]), Buffer.from(peerId)]));
+        });
+    }
+    /**
+     * 新規ピアソケットが接続された際に、プロキシから呼ばれる関数です。
+     */
+    private _newPeerSocket(peerId: string, socket: Socket): void {
+        this._peerSocketRequestResolves[peerId]?.(socket);
+        delete this._peerSocketRequestResolves[peerId];
     }
 }

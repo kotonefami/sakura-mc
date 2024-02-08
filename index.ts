@@ -21,9 +21,8 @@ if (process.argv[2] === "proxy") {
     }
 
     const client = new Client(proxy, destination);
-    client.connect();
     client.on("error", (err: Error) => {
         console.error(err);
         process.exit(1);
-    })
+    });
 }
