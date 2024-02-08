@@ -2,7 +2,7 @@ import { Socket, connect } from "net";
 import { SocketOpCode, SocketCloseCode, Address, SocketError } from "./Socket";
 import { EventEmitter } from "stream";
 import { Bridge } from "./Bridge";
-import { createPeerSocket } from "./client/Peer";
+import { createPeerSocket } from "./Peer";
 
 /** クライアント */
 export class Client extends EventEmitter {
@@ -62,7 +62,7 @@ export class Client extends EventEmitter {
             this.controlSocket.on("data", async data => {
                 const peerId = data.subarray(2, data[1] + 2).toString();
                 if (data[0] === SocketOpCode.CONNECT) {
-                    this.bridges[peerId] = new PoolBridge(createPeerSocket(proxy, peerId), connect(this.destination)).once("close", () => {
+                    this.bridges[peerId] = new Bridge(await createPeerSocket(proxy, peerId), connect(this.destination)).once("close", () => {
                         if (peerId in this.bridges) delete this.bridges[peerId];
                     });
                 }

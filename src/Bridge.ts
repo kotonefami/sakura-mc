@@ -1,6 +1,6 @@
 import type { Socket } from "node:net";
-import { createPeerSocket } from "./client/Peer";
 import { EventEmitter } from "node:events";
+import { Pool } from "./Pool";
 
 export interface SocketBridge {
     on(event: "close", listener: () => void): this;
@@ -15,29 +15,39 @@ export interface SocketBridge {
  */
 export class Bridge extends EventEmitter {
     /** ピアA */
-    public peerA: Socket;
+    public peerA: Pool;
     /** ピアB */
-    public peerB: Socket;
+    public peerB: Pool;
 
-    constructor(peerA: Socket, peerB: Socket) {
+    /** ソケットA */
+    public socketA: Socket | null = null;
+    /** ソケットB */
+    public socketB: Socket | null = null;
+
+    constructor(peerA: Socket | PromiseLike<Socket>, peerB: Socket | PromiseLike<Socket>) {
         super();
 
-        this.peerA = peerA;
-        this.peerB = peerB;
+        this.peerA = new Pool(peerA);
+        this.peerB = new Pool(peerB);
 
-        this.peerA.on("data", data => this.peerB.write(data));
-        this.peerB.on("data", data => this.peerA.write(data));
+        Promise.all([peerA, peerB].filter(p => p instanceof Promise)).then(async () => {
+            this.socketA = await this.peerA.socket!;
+            this.socketB = await this.peerB.socket!;
 
-        this.peerA.once("close", () => this.close());
-        this.peerB.once("close", () => this.close());
+            this.socketA.on("data", data => this.socketB!.write(data));
+            this.socketB.on("data", data => this.socketA!.write(data));
+
+            this.socketA.once("close", () => this.close());
+            this.socketB.once("close", () => this.close());
+        });
     }
 
     /**
      * ブリッジとソケットを終了します。
      */
     public close() {
-        if (!this.peerA.closed) this.peerA.end();
-        if (!this.peerB.closed) this.peerB.end();
+        if (!this.socketA!.closed) this.socketA!.end();
+        if (!this.socketB!.closed) this.socketB!.end();
 
         this.emit("close");
     }

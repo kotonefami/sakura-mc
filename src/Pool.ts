@@ -1,5 +1,4 @@
 import { Socket } from "net";
-import { isPromise } from "util/types";
 
 /** ソケットが確立するまでの間に送信されたパケットを、ソケットが確立した後に送信するクラスです。 */
 export class Pool {

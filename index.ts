@@ -2,7 +2,8 @@ import { createServer } from "node:net";
 import type { Socket } from "node:net";
 import { SocketCloseCode, SocketOpCode, resolveAddress } from "./src/Socket";
 import { Client } from "./src/Client";
-import { newPeerSocket, requestPeerSocket } from "./src/client/Peer";
+import { newPeerSocket, requestPeerSocket } from "./src/Peer";
+import { Bridge } from "./src/Bridge";
 
 if (process.argv[2] === "proxy") {
     const receptionPort = parseInt(process.argv[3] ?? "25565");
@@ -80,7 +81,7 @@ if (process.argv[2] === "proxy") {
         }
 
         const connectionId = `${thirdparty.remoteAddress}:${thirdparty.remotePort}`;
-        const bridge = new PoolBridge(thirdparty, requestPeerSocket(controlSocket, connectionId));
+        new Bridge(thirdparty, await requestPeerSocket(controlSocket, connectionId));
     }).on("error", err => {
         console.error(err);
     }).listen(receptionPort);

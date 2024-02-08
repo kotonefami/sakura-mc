@@ -3,7 +3,7 @@
  */
 
 import { Socket, connect } from "net";
-import { Address, SocketCloseCode, SocketError, SocketOpCode } from "../Socket";
+import { Address, SocketCloseCode, SocketError, SocketOpCode } from "./Socket";
 
 /**
  * プロキシとのピアソケットを作成します。
@@ -20,7 +20,7 @@ export async function createPeerSocket(proxy: Address, peerId: string): Promise<
         }).once("close", () => {
             reject(new SocketError(SocketCloseCode.INVALID_PEER_ID));
         });
-        socket.write(Buffer.concat([Buffer.from([SocketOpCode.CONNECT]), Buffer.from(peerId)]));
+        socket.write(Buffer.concat([Buffer.from([SocketOpCode.CONNECT, peerId.length]), Buffer.from(peerId)]));
     });
 }
 
@@ -32,10 +32,9 @@ let peerSocketRequestResolves: Record<string, (socket: Socket) => any> = {};
  * @param peerId ピアソケットID
  */
 export async function requestPeerSocket(controlSocket: Socket, peerId: string): Promise<Socket> {
-    controlSocket.write(Buffer.concat([Buffer.from([SocketOpCode.CONNECT, peerId.length]), Buffer.from(peerId)]));
-
     return await new Promise<Socket>((resolve, reject) => {
         peerSocketRequestResolves[peerId] = resolve;
+        controlSocket.write(Buffer.concat([Buffer.from([SocketOpCode.CONNECT, peerId.length]), Buffer.from(peerId)]));
     });
 }
 
@@ -44,4 +43,5 @@ export async function requestPeerSocket(controlSocket: Socket, peerId: string): 
  */
 export function newPeerSocket(peerId: string, socket: Socket): void {
     peerSocketRequestResolves[peerId]?.(socket);
+    delete peerSocketRequestResolves[peerId];
 }
