@@ -2,7 +2,7 @@
  * ピアソケット: プロキシ・クライアント間のデータ通信用ソケット。
  */
 
-import { Socket, connect } from "net";
+import { Socket, connect } from "node:net";
 import { Address, SocketCloseCode, SocketError, SocketOpCode } from "./Socket";
 
 /**

@@ -1,4 +1,4 @@
-import { Socket } from "net";
+import { Socket } from "node:net";
 
 /** ソケットが確立するまでの間に送信されたパケットを、ソケットが確立した後に送信するクラスです。 */
 export class Pool {
@@ -31,7 +31,9 @@ export class Pool {
         this._socket = socket;
     }
 
-    /** プールにバッファを送信します。 */
+    /**
+     * プールにバッファを送信します。
+     */
     public push(buffer: Buffer) {
         if (this.socket instanceof Socket) {
             this.socket.write(buffer);

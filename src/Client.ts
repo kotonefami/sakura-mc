@@ -1,10 +1,18 @@
-import { Socket, connect } from "net";
+import { Socket, connect } from "node:net";
+import { EventEmitter } from "node:stream";
 import { SocketOpCode, SocketCloseCode, Address, SocketError } from "./Socket";
-import { EventEmitter } from "stream";
 import { Bridge } from "./Bridge";
 import { createPeerSocket } from "./Peer";
 
-/** クライアント */
+export interface Client {
+    on(event: "error", listener: (error: Error) => void): this;
+    once(event: "error", listener: (error: Error) => void): this;
+    addListener(event: "error", listener: (error: Error) => void): this;
+    prependListener(event: "error", listener: (error: Error) => void): this;
+    prependOnceListener(event: "error", listener: (error: Error) => void): this;
+}
+
+/** SakuraMC クライアント */
 export class Client extends EventEmitter {
     /** プロキシアドレス */
     public proxy: Address;
@@ -78,5 +86,13 @@ export class Client extends EventEmitter {
      */
     public async connect(): Promise<SocketCloseCode> {
         return await this._connectPromise;
+    }
+
+    /**
+     * クライアントを終了します。
+     */
+    public close(): void {
+        this.controlSocket.end();
+        Object.values(this.bridges).forEach(bridge => bridge.close());
     }
 }
