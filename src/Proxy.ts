@@ -88,7 +88,7 @@ export class Proxy extends EventEmitter {
             console.log(`ポート ${receptionPort} で Minecraft 接続を待機しています`);
         }).on("connection", async thirdparty => {
             if (this.controlSocket === null) {
-                thirdparty.destroy();
+                thirdparty.end();
                 return;
             }
 

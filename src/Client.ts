@@ -69,7 +69,15 @@ export class Client extends EventEmitter {
             this.controlSocket.on("data", async data => {
                 const peerId = data.subarray(2, data[1] + 2).toString();
                 if (data[0] === SocketOpCode.CONNECT) {
-                    this.bridges[peerId] = new Bridge(await this._createPeerSocket(peerId), connect(this.destination)).once("close", () => {
+                    this.bridges[peerId] = new Bridge(await this._createPeerSocket(peerId), connect(this.destination).on("error", err => {
+                        const errorCode = (err as Error & { code: string; }).code ?? "";
+
+                        if (errorCode === "ECONNREFUSED") {
+                            console.error(`${this.destination.host}:${this.destination.port} に接続できませんでした。 (ECONNREFUSED)`);
+                        } else {
+                            console.error(err);
+                        }
+                    })).once("close", () => {
                         if (peerId in this.bridges) delete this.bridges[peerId];
                     });
                 }
