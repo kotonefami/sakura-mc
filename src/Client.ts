@@ -106,6 +106,9 @@ export class Client extends EventEmitter {
                         reject(this._closeReason);
                     });
                 });
+            }).catch((code: SocketCloseCode) => {
+                logger.error(`プロキシはすでに別のクライアントに予約済みです (SOCK_RESERVED)`);
+                return code;
             }).then(code => {
                 this.controlSocket.on("data", async data => {
                     const peerId = data.subarray(2, data[1] + 2).toString();
