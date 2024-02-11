@@ -2,6 +2,8 @@ import { createServer, Server, type Socket } from "node:net";
 import { EventEmitter } from "node:stream";
 import { SocketCloseCode, SocketOpCode } from "./Socket";
 import { Bridge } from "./Bridge";
+import { MinecraftBufferReader } from "./minecraft/MinecraftBuffer";
+import { MinecraftHandshakePacket, MinecraftLoginClientboundPacket, MinecraftPacketEncoder, MinecraftState, MinecraftStatusPacket } from "./minecraft/MinecraftPacket";
 
 /** SakuraMC プロキシ */
 export class Proxy extends EventEmitter {
@@ -88,7 +90,59 @@ export class Proxy extends EventEmitter {
             console.log(`ポート ${receptionPort} で Minecraft 接続を待機しています`);
         }).on("connection", async thirdparty => {
             if (this.controlSocket === null) {
-                thirdparty.end();
+                let state: MinecraftState = MinecraftState.HANDSHAKE;
+                let protocolVersion: number = 0;
+                let host: string = "";
+                let port: number = 0;
+
+                thirdparty.on("data", data => {
+                    const reader = new MinecraftBufferReader(data);
+                    const packet = new MinecraftBufferReader(reader.readBuffer(reader.readVarUInt()));
+                    const packetId = packet.readVarUInt();
+                    const body = new MinecraftBufferReader(packet.readBuffer(packet.data.byteLength - packet.cursor));
+
+                    if (state === MinecraftState.HANDSHAKE) {
+                        if (packetId === MinecraftHandshakePacket.HANDSHAKE) {
+                            protocolVersion = body.readVarUInt();
+                            host = body.readString(body.readUInt8());
+                            port = body.readUInt16();
+
+                            state = body.readInt8() as MinecraftState;
+                        }
+                    } else if (state === MinecraftState.STATUS) {
+                        if (packetId === MinecraftStatusPacket.STATUS) {
+                            thirdparty.write(Buffer.from(new MinecraftPacketEncoder(MinecraftStatusPacket.STATUS).write(JSON.stringify({
+                                "version": {
+                                    "name": "§4Offline",
+                                    "protocol": protocolVersion
+                                },
+                                "players": {
+                                    "max": 0,
+                                    "online": 0,
+                                    "sample": [
+                                        { id: "13df8ae6-b474-4478-8a32-c34e755b5ef8", name: "§cSakuraMC プロキシが有効なクライアントに接続されていないため、" },
+                                        { id: "4dbedfaf-fb20-4acc-831e-390b6d7b735e", name: "§cMinecraft サーバーに接続できませんでした。" }
+                                    ]
+                                },
+                                "description": {
+                                    "text": "§cバックエンドサーバーに接続できません"
+                                },
+                                "favicon": "data:image/png;base64,",
+                                "enforcesSecureChat": false,
+                                "previewsChat": false
+                            }), { withVarUIntLength: true }).arrayBuffer()));
+                        } else if (packetId === MinecraftStatusPacket.PING) {
+                            thirdparty.write(Buffer.from(new MinecraftPacketEncoder(MinecraftStatusPacket.PING).write(body.data.buffer, { withVarUIntLength: true }).arrayBuffer()));
+                        }
+                    } else if (state === MinecraftState.LOGIN) {
+                        if (packetId === MinecraftLoginClientboundPacket.DISCONNECT) {
+                            thirdparty.write(Buffer.from(new MinecraftPacketEncoder(MinecraftLoginClientboundPacket.DISCONNECT).write(JSON.stringify({
+                                "text": "SakuraMC プロキシが有効なクライアントに接続されていないため、\nMinecraft サーバーに接続できませんでした。"
+                            }), { withVarUIntLength: true }).arrayBuffer()));
+                        }
+                    }
+                });
+                thirdparty.on("error", () => {});
                 return;
             }
 

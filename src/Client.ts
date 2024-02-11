@@ -48,7 +48,8 @@ export class Client extends EventEmitter {
                 this.controlSocket.once("data", data => {
                     if (data[0] === SocketOpCode.HANDSHAKE) {
                         if (data[1] === SocketCloseCode.OK) {
-                            console.log(`プロキシ ${this.proxy.host}:${this.proxy.port} との接続を確立しました`);
+                            console.log(`プロキシに接続しました`);
+                            console.log(`サードパーティー <=> プロキシ [${this.proxy.host}:${this.proxy.port}] <=> クライアント [localhost:*] <=> サーバー [${this.destination.host}:${this.destination.port}]`);
                             resolve(SocketCloseCode.OK);
                         } else {
                             this._closeReason = data[1];
@@ -74,6 +75,8 @@ export class Client extends EventEmitter {
 
                         if (errorCode === "ECONNREFUSED") {
                             console.error(`${this.destination.host}:${this.destination.port} に接続できませんでした。 (ECONNREFUSED)`);
+                        } else if (errorCode === "ECONNRESET") {
+                            console.error(`${this.destination.host}:${this.destination.port} との接続が切断されました。 (ECONNRESET)`);
                         } else {
                             console.error(err);
                         }
