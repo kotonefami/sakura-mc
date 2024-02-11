@@ -1,9 +1,14 @@
-import { build } from "esbuild";
+import { rollup } from "rollup";
+import rollupNodeResolve from "@rollup/plugin-node-resolve";
+import rollupTypescript from "@rollup/plugin-typescript";
 
-build({
-    entryPoints: ["index.ts"],
-    outfile: "dist/index.js",
-    platform: "node",
-    minify: true,
-    bundle: true
-})
+(await rollup({
+    input: "./index.ts",
+    plugins: [
+        rollupNodeResolve(),
+        rollupTypescript()
+    ]
+})).write({
+    format: "cjs",
+    file: "./dist/index.js"
+});

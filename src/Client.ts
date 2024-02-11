@@ -3,6 +3,7 @@ import { EventEmitter } from "node:stream";
 import { SocketOpCode, SocketCloseCode, Address, SocketError } from "./Socket";
 import { Bridge } from "./Bridge";
 import { wait } from "./utils/Promise";
+import logger from "sakura-logger";
 
 interface ClientInit {
     /** ハートビートを送信する間隔（ミリ秒） */
@@ -52,7 +53,7 @@ export class Client extends EventEmitter {
             })
             .setTimeout(options.timeout ?? 30000)
             .on("timeout", () => {
-                console.error(`プロキシとの接続がタイムアウトしました (EVT_TIMEOUT)`);
+                logger.error(`プロキシとの接続がタイムアウトしました (EVT_TIMEOUT)`);
                 this.controlSocket.destroy();
                 this.controlSocket = reconnect();
             })
@@ -61,11 +62,11 @@ export class Client extends EventEmitter {
 
                 const errorCode = (err as Error & { code: string; }).code ?? "";
                 if (errorCode === "ECONNREFUSED") {
-                    console.error(`プロキシに接続できませんでした (ECONNREFUSED)`);
+                    logger.error(`プロキシに接続できませんでした (ECONNREFUSED)`);
                 } else if (errorCode === "ECONNRESET") {
-                    console.error(`プロキシとの接続が切断されました (ECONNRESET)`);
+                    logger.error(`プロキシとの接続が切断されました (ECONNRESET)`);
                 } else {
-                    console.error(err);
+                    logger.error(err);
                 }
 
                 for (let i = 0; i < _waitSeconds; i++) {
@@ -91,8 +92,8 @@ export class Client extends EventEmitter {
                         if (data[0] === SocketOpCode.HANDSHAKE) {
                             if (data[1] === SocketCloseCode.OK) {
                                 _waitSeconds = 1;
-                                console.log(`クライアントとしてプロキシに接続しました`);
-                                console.log(`サードパーティー <=> プロキシ [${this.proxy.host}:${this.proxy.port}] <=> クライアント [localhost:*] <=> サーバー [${this.destination.host}:${this.destination.port}]`);
+                                logger.info(`クライアントとしてプロキシに接続しました`);
+                                logger.debug(`サードパーティー <=> プロキシ [${this.proxy.host}:${this.proxy.port}] <=> クライアント [localhost:*] <=> サーバー [${this.destination.host}:${this.destination.port}]`);
                                 resolve(SocketCloseCode.OK);
                             } else {
                                 this._closeReason = data[1];
@@ -113,11 +114,11 @@ export class Client extends EventEmitter {
                             const errorCode = (err as Error & { code: string; }).code ?? "";
 
                             if (errorCode === "ECONNREFUSED") {
-                                console.error(`${this.destination.host}:${this.destination.port} に接続できませんでした。 (ECONNREFUSED)`);
+                                logger.error(`${this.destination.host}:${this.destination.port} に接続できませんでした。 (ECONNREFUSED)`);
                             } else if (errorCode === "ECONNRESET") {
-                                console.error(`${this.destination.host}:${this.destination.port} との接続が切断されました。 (ECONNRESET)`);
+                                logger.error(`${this.destination.host}:${this.destination.port} との接続が切断されました。 (ECONNRESET)`);
                             } else {
-                                console.error(err);
+                                logger.error(err);
                             }
                         })).once("close", () => {
                             if (peerId in this.bridges) delete this.bridges[peerId];

@@ -4,6 +4,7 @@ import { SocketCloseCode, SocketOpCode } from "./Socket";
 import { Bridge } from "./Bridge";
 import { MinecraftBufferReader } from "./minecraft/MinecraftBuffer";
 import { MinecraftHandshakePacket, MinecraftLoginClientboundPacket, MinecraftPacketEncoder, MinecraftState, MinecraftStatusPacket } from "./minecraft/MinecraftPacket";
+import logger from "sakura-logger";
 
 /** SakuraMC プロキシ */
 export class Proxy extends EventEmitter {
@@ -25,12 +26,12 @@ export class Proxy extends EventEmitter {
         super();
 
         this.controlServer = createServer().on("listening", () => {
-            console.log("SakuraMC - Minecraft Port Transfering Proxy");
-            console.log(`ポート ${controlPort} でクライアント接続を待機しています`);
+            logger.info("SakuraMC - Minecraft Port Transfering Proxy");
+            logger.info(`ポート ${controlPort} でクライアント接続を待機しています`);
         }).on("connection", async socket => {
             socket.on("error", err => {
                 if (err.message.includes("ECONNRESET")) return;
-                console.error(err);
+                logger.error(err);
             });
 
             const connectResult = await new Promise<SocketCloseCode>((resolve, reject) =>
@@ -73,21 +74,21 @@ export class Proxy extends EventEmitter {
             );
             if (connectResult === SocketCloseCode.OK) {
                 this.controlSocket = socket;
-                console.log(`${this.controlSocket.remoteAddress} がプロキシを予約しました`);
+                logger.debug(`${this.controlSocket.remoteAddress} がプロキシを予約しました`);
 
                 socket.on("close", () => {
                     if (this.controlSocket) {
-                        console.log(`${this.controlSocket.remoteAddress} がプロキシの使用を終了しました`);
+                        logger.debug(`${this.controlSocket.remoteAddress} がプロキシの使用を終了しました`);
                         this.controlSocket = null;
                     }
                 });
             }
         }).on("error", err => {
-            console.error(err);
+            logger.error(err);
         }).listen(controlPort);
 
         this.receptionServer = createServer().on("listening", () => {
-            console.log(`ポート ${receptionPort} で Minecraft 接続を待機しています`);
+            logger.info(`ポート ${receptionPort} で Minecraft 接続を待機しています`);
         }).on("connection", async thirdparty => {
             if (this.controlSocket === null) {
                 let state: MinecraftState = MinecraftState.HANDSHAKE;
@@ -150,7 +151,7 @@ export class Proxy extends EventEmitter {
             new Bridge(thirdparty, this._requestPeerSocket(this.controlSocket, connectionId));
         }).on("error", err => {
             // TODO: サードパーティーソケットのエラーはどうするべきか
-            console.error(err);
+            logger.error(err);
         }).listen(receptionPort);
     }
 
