@@ -2,6 +2,15 @@ import { Socket, connect } from "node:net";
 import { EventEmitter } from "node:stream";
 import { SocketOpCode, SocketCloseCode, Address, SocketError } from "./Socket";
 import { Bridge } from "./Bridge";
+import { wait } from "./utils/Promise";
+
+interface ClientInit {
+    /** ハートビートを送信する間隔（ミリ秒） */
+    heartbeatInterval?: number
+
+    /** タイムアウト時間（ミリ秒） */
+    timeout?: number;
+}
 
 export interface Client {
     on(event: "error", listener: (error: Error) => void): this;
@@ -28,66 +37,104 @@ export class Client extends EventEmitter {
 
     private _connectPromise: Promise<SocketCloseCode>;
 
-    constructor(proxy: Address, destination: Address) {
+    constructor(proxy: Address, destination: Address, options: ClientInit = {}) {
         super();
+
+        let _waitSeconds = 1;
+        const reconnect = (): Socket => {
+            const heartbeatInterval = setInterval(() => {
+                this.controlSocket.write(Buffer.from([SocketOpCode.HEARTBEAT]));
+            }, options.heartbeatInterval ?? 10000);
+
+            this.controlSocket = connect({
+                host: this.proxy.host,
+                port: this.proxy.port
+            })
+            .setTimeout(options.timeout ?? 30000)
+            .on("timeout", () => {
+                console.error(`プロキシとの接続がタイムアウトしました (EVT_TIMEOUT)`);
+                this.controlSocket.destroy();
+                this.controlSocket = reconnect();
+            })
+            .on("error", async err => {
+                this.controlSocket.destroy();
+
+                const errorCode = (err as Error & { code: string; }).code ?? "";
+                if (errorCode === "ECONNREFUSED") {
+                    console.error(`プロキシに接続できませんでした (ECONNREFUSED)`);
+                } else if (errorCode === "ECONNRESET") {
+                    console.error(`プロキシとの接続が切断されました (ECONNRESET)`);
+                } else {
+                    console.error(err);
+                }
+
+                for (let i = 0; i < _waitSeconds; i++) {
+                    process.stdout.write(`\r${_waitSeconds - i} 秒後に再接続します...`);
+                    await wait(1000);
+                    process.stdout.write(`\r`);
+                }
+                _waitSeconds *= 2;
+
+                this.controlSocket = reconnect();
+            })
+            .on("close", () => {
+                clearInterval(heartbeatInterval);
+            });
+
+            this._connectPromise = new Promise<SocketCloseCode>((resolve, reject) => {
+                this.controlSocket.once("connect", () => {
+                    this.controlSocket.write(Buffer.from([
+                        SocketOpCode.HANDSHAKE
+                    ]));
+
+                    this.controlSocket.once("data", data => {
+                        if (data[0] === SocketOpCode.HANDSHAKE) {
+                            if (data[1] === SocketCloseCode.OK) {
+                                _waitSeconds = 1;
+                                console.log(`クライアントとしてプロキシに接続しました`);
+                                console.log(`サードパーティー <=> プロキシ [${this.proxy.host}:${this.proxy.port}] <=> クライアント [localhost:*] <=> サーバー [${this.destination.host}:${this.destination.port}]`);
+                                resolve(SocketCloseCode.OK);
+                            } else {
+                                this._closeReason = data[1];
+                            }
+                        } else {
+                            reject(SocketCloseCode.UNKNOWN);
+                        }
+                    });
+                    this.controlSocket.once("close", () => {
+                        reject(this._closeReason);
+                    });
+                });
+            }).then(code => {
+                this.controlSocket.on("data", async data => {
+                    const peerId = data.subarray(2, data[1] + 2).toString();
+                    if (data[0] === SocketOpCode.CONNECT) {
+                        this.bridges[peerId] = new Bridge(await this._createPeerSocket(peerId), connect(this.destination).on("error", err => {
+                            const errorCode = (err as Error & { code: string; }).code ?? "";
+
+                            if (errorCode === "ECONNREFUSED") {
+                                console.error(`${this.destination.host}:${this.destination.port} に接続できませんでした。 (ECONNREFUSED)`);
+                            } else if (errorCode === "ECONNRESET") {
+                                console.error(`${this.destination.host}:${this.destination.port} との接続が切断されました。 (ECONNRESET)`);
+                            } else {
+                                console.error(err);
+                            }
+                        })).once("close", () => {
+                            if (peerId in this.bridges) delete this.bridges[peerId];
+                        });
+                    }
+                });
+
+                return code;
+            });
+
+            return this.controlSocket;
+        };
 
         this.proxy = proxy;
         this.destination = destination;
-        this.controlSocket = connect({
-            host: this.proxy.host,
-            port: this.proxy.port
-        });
-
-        this._connectPromise = new Promise<SocketCloseCode>((resolve, reject) => {
-            this.controlSocket.on("error", err => this.emit("error", err));
-            this.controlSocket.once("connect", () => {
-                this.controlSocket.write(Buffer.from([
-                    SocketOpCode.HANDSHAKE
-                ]));
-
-                this.controlSocket.once("data", data => {
-                    if (data[0] === SocketOpCode.HANDSHAKE) {
-                        if (data[1] === SocketCloseCode.OK) {
-                            console.log(`プロキシに接続しました`);
-                            console.log(`サードパーティー <=> プロキシ [${this.proxy.host}:${this.proxy.port}] <=> クライアント [localhost:*] <=> サーバー [${this.destination.host}:${this.destination.port}]`);
-                            resolve(SocketCloseCode.OK);
-                        } else {
-                            this._closeReason = data[1];
-                        }
-                    } else {
-                        reject(SocketCloseCode.UNKNOWN);
-                    }
-                });
-                this.controlSocket.once("close", () => {
-                    reject(this._closeReason);
-                    process.exit(1);
-                });
-            });
-        }).catch((code: SocketCloseCode) => {
-            this.emit("error", new SocketError(code));
-            return code;
-        }).then(code => {
-            this.controlSocket.on("data", async data => {
-                const peerId = data.subarray(2, data[1] + 2).toString();
-                if (data[0] === SocketOpCode.CONNECT) {
-                    this.bridges[peerId] = new Bridge(await this._createPeerSocket(peerId), connect(this.destination).on("error", err => {
-                        const errorCode = (err as Error & { code: string; }).code ?? "";
-
-                        if (errorCode === "ECONNREFUSED") {
-                            console.error(`${this.destination.host}:${this.destination.port} に接続できませんでした。 (ECONNREFUSED)`);
-                        } else if (errorCode === "ECONNRESET") {
-                            console.error(`${this.destination.host}:${this.destination.port} との接続が切断されました。 (ECONNRESET)`);
-                        } else {
-                            console.error(err);
-                        }
-                    })).once("close", () => {
-                        if (peerId in this.bridges) delete this.bridges[peerId];
-                    });
-                }
-            });
-
-            return code;
-        });
+        this.controlSocket = reconnect();
+        this._connectPromise = new Promise(() => {});
     }
 
     /**

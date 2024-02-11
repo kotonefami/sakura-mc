@@ -14,6 +14,9 @@ export enum SocketOpCode {
 
     /** ピアソケットの作成 */
     CONNECT = 1,
+
+    /** ハートビート */
+    HEARTBEAT = 2,
 };
 
 /** 制御ソケットクローズコード */
