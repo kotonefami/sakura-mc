@@ -90,6 +90,8 @@ export class Proxy extends EventEmitter {
         this.receptionServer = createServer().on("listening", () => {
             logger.info(`ポート ${receptionPort} で Minecraft 接続を待機しています`);
         }).on("connection", async thirdparty => {
+            thirdparty.on("error", () => {});
+
             if (this.controlSocket === null) {
                 let state: MinecraftState = MinecraftState.HANDSHAKE;
                 let protocolVersion: number = 0;
@@ -143,7 +145,6 @@ export class Proxy extends EventEmitter {
                         }
                     }
                 });
-                thirdparty.on("error", () => {});
                 return;
             }
 
