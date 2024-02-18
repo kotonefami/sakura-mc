@@ -26,7 +26,7 @@ export class Proxy extends EventEmitter {
         super();
 
         this.controlServer = createServer().on("listening", () => {
-            logger.info("SakuraMC - Minecraft Port Transfering Proxy");
+            logger.info("SakuraMC - Minecraft port-transfering proxy");
             logger.info(`ポート ${controlPort} でクライアント接続を待機しています`);
         }).on("connection", async socket => {
             socket.on("error", err => {

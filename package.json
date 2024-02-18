@@ -1,13 +1,14 @@
 {
   "name": "sakura-mc",
   "version": "1.0.1",
-  "description": "Minecraft Port Transfering Proxy",
+  "description": "Minecraft port-transfering proxy - without opening the port!",
   "scripts": {
     "build": "node scripts/build.mjs",
     "pack": "node scripts/pack.mjs SakuraMC-Client.exe"
   },
   "keywords": [
-    "minecraft"
+    "minecraft",
+    "proxy"
   ],
   "license": "MIT",
   "author": "Kotone Fami <fami@ktnfm.com>",
