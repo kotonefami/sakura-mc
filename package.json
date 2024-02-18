@@ -1,6 +1,6 @@
 {
   "name": "sakura-mc",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Minecraft port-transfering proxy - without opening the port!",
   "scripts": {
     "build": "node scripts/build.mjs",
