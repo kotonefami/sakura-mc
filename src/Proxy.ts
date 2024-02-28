@@ -5,6 +5,7 @@ import { Bridge } from "./Bridge";
 import { MinecraftBufferReader } from "./minecraft/MinecraftBuffer";
 import { MinecraftHandshakePacket, MinecraftLoginClientboundPacket, MinecraftPacketEncoder, MinecraftState, MinecraftStatusPacket } from "./minecraft/MinecraftPacket";
 import logger from "sakura-logger";
+import { IPlugin } from "./plugins/IPlugin";
 
 /** SakuraMC プロキシ */
 export class Proxy extends EventEmitter {
@@ -15,6 +16,9 @@ export class Proxy extends EventEmitter {
 
     /** アクティブな制御ソケット */
     public controlSocket: Socket | null = null;
+
+    /** プラグイン */
+    public plugins: IPlugin[] = [];
 
     private _peerSocketRequestResolves: Record<string, (socket: Socket) => any> = {};
 
@@ -75,11 +79,13 @@ export class Proxy extends EventEmitter {
             if (connectResult === SocketCloseCode.OK) {
                 this.controlSocket = socket;
                 logger.debug(`${this.controlSocket.remoteAddress} がプロキシを予約しました`);
+                this.plugins.forEach(p => p.onConnectClient?.({ proxy: this }));
 
                 socket.on("close", () => {
                     if (this.controlSocket) {
                         logger.debug(`${this.controlSocket.remoteAddress} がプロキシの使用を終了しました`);
                         this.controlSocket = null;
+                        this.plugins.forEach(p => p.onDisconnectClient?.({ proxy: this }));
                     }
                 });
             }
@@ -89,6 +95,8 @@ export class Proxy extends EventEmitter {
 
         this.receptionServer = createServer().on("listening", () => {
             logger.info(`ポート ${receptionPort} で Minecraft 接続を待機しています`);
+
+            this.plugins.forEach(p => p.onStart?.({ proxy: this }, this));
         }).on("connection", async thirdparty => {
             thirdparty.on("error", () => {});
 
@@ -148,12 +156,25 @@ export class Proxy extends EventEmitter {
                 return;
             }
 
+            this.plugins.forEach(p => p.onConnectThirdparty?.({ proxy: this }));
+            thirdparty.on("close", () => this.plugins.forEach(p => p.onDisconnectThirdparty?.({ proxy: this })));
+
             const connectionId = `${thirdparty.remoteAddress}:${thirdparty.remotePort}`;
             new Bridge(thirdparty, this._requestPeerSocket(this.controlSocket, connectionId));
         }).on("error", err => {
             // TODO: サードパーティーソケットのエラーはどうするべきか
             logger.error(err);
         }).listen(receptionPort);
+    }
+
+    /**
+     * プロキシを終了します。
+     */
+    public close(): void {
+        this.controlSocket = null;
+        this.controlServer.close();
+        this.receptionServer.close();
+        this.plugins.forEach(p => p.onStop?.({ proxy: this }));
     }
 
     /**

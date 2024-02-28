@@ -3,7 +3,10 @@ import rollupNodeResolve from "@rollup/plugin-node-resolve";
 import rollupTypescript from "@rollup/plugin-typescript";
 
 (await rollup({
-    input: "./index.ts",
+    input: process.argv[2] ?? "./index.ts",
+    external: [
+        "discord.js"
+    ],
     plugins: [
         rollupNodeResolve(),
         rollupTypescript()
