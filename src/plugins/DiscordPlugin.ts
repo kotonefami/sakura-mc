@@ -20,7 +20,6 @@ export class DiscordPlugin implements IPlugin {
     async onStart(_: PluginEvent, proxy: Proxy): Promise<void> {
         this.proxy = proxy;
         await this.discord.login(this._token);
-        this.discord.user?.setStatus(PresenceUpdateStatus.Invisible);
         this._updateActivity();
     }
     async onStop(): Promise<void> {
@@ -41,13 +40,28 @@ export class DiscordPlugin implements IPlugin {
         this._updateActivity();
     }
 
-    private _updateActivity() {
+    private async _getConnectionCount(): Promise<number> {
+        return await new Promise<number>((resolve, reject) => {
+            if (!this.proxy) {
+                resolve(0);
+            } else {
+                this.proxy.receptionServer.getConnections((error, count) => {
+                    if (error) resolve(0);
+                    resolve(count);
+                });
+            }
+        });
+    }
+
+    private async _updateActivity(): Promise<void> {
         if (!this.proxy) return;
 
         if (this.proxy.controlSocket) {
-            if (this.proxy.receptionServer.connections > 0) {
+            const connectionCount = await this._getConnectionCount();
+            if (connectionCount > 0) {
+                // TODO: Ping でもここが走ってしまう
                 this.discord.user?.setStatus(PresenceUpdateStatus.Online);
-                this.discord.user?.setActivity({ name: `${this.proxy.receptionServer.connections}人がMinecraft`, type: ActivityType.Playing });
+                this.discord.user?.setActivity({ name: `${connectionCount}人がMinecraft`, type: ActivityType.Playing });
             } else {
                 this.discord.user?.setStatus(PresenceUpdateStatus.Online);
                 this.discord.user?.setActivity({ name: "Minecraft", type: ActivityType.Playing });
