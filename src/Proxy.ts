@@ -171,6 +171,8 @@ export class Proxy extends EventEmitter {
      * プロキシを終了します。
      */
     public close(): void {
+        logger.info("プロキシを終了しています");
+
         this.controlSocket = null;
         this.controlServer.close();
         this.receptionServer.close();
