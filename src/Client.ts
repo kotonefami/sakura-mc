@@ -54,12 +54,10 @@ export class Client extends EventEmitter {
             .setTimeout(options.timeout ?? 30000)
             .on("timeout", () => {
                 logger.error(`プロキシとの接続がタイムアウトしました (EVT_TIMEOUT)`);
+
                 this.controlSocket.destroy();
-                this.controlSocket = reconnect();
             })
             .on("error", async err => {
-                this.controlSocket.destroy();
-
                 const errorCode = (err as Error & { code: string; }).code ?? "";
                 if (errorCode === "ECONNREFUSED") {
                     logger.error(`プロキシに接続できませんでした (ECONNREFUSED)`);
@@ -69,6 +67,13 @@ export class Client extends EventEmitter {
                     logger.error(err);
                 }
 
+                this.controlSocket.destroy();
+            })
+            .on("close", async () => {
+                clearInterval(heartbeatInterval);
+
+                logger.warn(`プロキシとの接続が切断されました (GRACEFUL_SHUTDOWN)`);
+
                 for (let i = 0; i < _waitSeconds; i++) {
                     process.stdout.write(`\r${_waitSeconds - i} 秒後に再接続します...`);
                     await wait(1000);
@@ -77,9 +82,6 @@ export class Client extends EventEmitter {
                 _waitSeconds *= 2;
 
                 this.controlSocket = reconnect();
-            })
-            .on("close", () => {
-                clearInterval(heartbeatInterval);
             });
 
             this._connectPromise = new Promise<SocketCloseCode>((resolve, reject) => {
@@ -117,9 +119,9 @@ export class Client extends EventEmitter {
                             const errorCode = (err as Error & { code: string; }).code ?? "";
 
                             if (errorCode === "ECONNREFUSED") {
-                                logger.error(`${this.destination.host}:${this.destination.port} に接続できませんでした。 (ECONNREFUSED)`);
+                                logger.error(`${this.destination.host}:${this.destination.port} に接続できませんでした (ECONNREFUSED)`);
                             } else if (errorCode === "ECONNRESET") {
-                                logger.error(`${this.destination.host}:${this.destination.port} との接続が切断されました。 (ECONNRESET)`);
+                                logger.error(`${this.destination.host}:${this.destination.port} との接続が切断されました (ECONNRESET)`);
                             } else {
                                 logger.error(err);
                             }
