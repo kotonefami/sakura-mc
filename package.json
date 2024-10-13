@@ -13,16 +13,16 @@
   "license": "MIT",
   "author": "Kotone Fami <fami@ktnfm.com>",
   "devDependencies": {
-    "@rollup/plugin-node-resolve": "^15.2.3",
-    "@rollup/plugin-typescript": "^11.1.6",
-    "@types/node": "^20.11.16",
+    "@rollup/plugin-node-resolve": "^15.3.0",
+    "@rollup/plugin-typescript": "^12.1.0",
+    "@types/node": "^22.7.5",
     "postject": "1.0.0-alpha.6",
-    "rollup": "^4.10.0",
-    "sakura-logger": "^1.0.1",
-    "tslib": "^2.6.2",
-    "tsx": "^4.7.0"
+    "rollup": "^4.24.0",
+    "sakura-logger": "^1.0.2",
+    "tslib": "^2.7.0",
+    "tsx": "^4.19.1"
   },
   "dependencies": {
-    "discord.js": "^14.14.1"
+    "discord.js": "^14.16.3"
   }
 }
