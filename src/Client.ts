@@ -1,9 +1,11 @@
 import { Socket, connect } from "node:net";
-import { EventEmitter } from "node:stream";
+import { EventEmitter } from "node:events";
 import { SocketOpCode, SocketCloseCode, Address, SocketError } from "./Socket";
 import { Bridge } from "./Bridge";
 import { wait } from "./utils/Promise";
-import logger from "sakura-logger";
+import { Logger } from "sakura-logger";
+
+const logger = new Logger();
 
 interface ClientInit {
     /** ハートビートを送信する間隔（ミリ秒） */

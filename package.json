@@ -4,6 +4,7 @@
   "description": "Minecraft port-transfering proxy - without opening the port!",
   "scripts": {
     "build": "node scripts/build.mjs",
+    "build-bun": "bun build --target=node --minify",
     "pack": "node scripts/pack.mjs SakuraMC-Client.exe"
   },
   "keywords": [

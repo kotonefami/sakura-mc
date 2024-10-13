@@ -1,11 +1,13 @@
 import { createServer, Server, type Socket } from "node:net";
-import { EventEmitter } from "node:stream";
+import { EventEmitter } from "node:events";
 import { SocketCloseCode, SocketOpCode } from "./Socket";
 import { Bridge } from "./Bridge";
 import { MinecraftBufferReader } from "./minecraft/MinecraftBuffer";
 import { MinecraftHandshakePacket, MinecraftLoginClientboundPacket, MinecraftPacketEncoder, MinecraftState, MinecraftStatusPacket } from "./minecraft/MinecraftPacket";
-import logger from "sakura-logger";
+import { Logger } from "sakura-logger";
 import { IPlugin } from "./plugins/IPlugin";
+
+const logger = new Logger();
 
 /** SakuraMC プロキシ */
 export class Proxy extends EventEmitter {
